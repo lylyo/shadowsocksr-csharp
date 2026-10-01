@@ -115,7 +115,10 @@ namespace Shadowsocks.Controller
                                         ipAddress = Utils.DnsBuffer.Get(host);
                                     }
                                 }
-                                if (ipAddress == null)
+                                // In UserCustom mode, an unmatched domain goes remote by default.
+                                // Do not resolve it locally just to classify its IP: explicit domain
+                                // rules above have already handled localproxy/direct/reject/remoteproxy.
+                                if (ipAddress == null && _config.proxyRuleMode != (int)ProxyRuleMode.UserCustom)
                                 {
                                     if (host.IndexOf('.') >= 0)
                                     {
