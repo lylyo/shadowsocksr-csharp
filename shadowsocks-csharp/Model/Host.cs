@@ -92,29 +92,52 @@ namespace Shadowsocks.Model
         {
             string[] parts = host.Split('.');
             Dictionary<string, HostNode> node = root;
+            HostNode bestNode = null;
+            int bestIndex = -1;
             addr = null;
+
             for (int i = parts.Length - 1; i >= 0; --i)
             {
                 if (!node.ContainsKey(parts[i]))
+                    break;
+
+                HostNode current = node[parts[i]];
+
+                // Keep the most specific suffix seen so far.  A rule beginning
+                // with '.' (include_sub) matches this domain and all subdomains.
+                // A rule without include_sub only matches the exact domain.
+                if (current.addr.Length > 0 &&
+                    (current.include_sub || i == 0))
                 {
-                    return false;
+                    bestNode = current;
+                    bestIndex = i;
                 }
-                if (node[parts[i]].addr.Length > 0 || node[parts[i]].include_sub)
+
+                // A wildcard rule is more specific than a parent suffix,
+                // but only applies when there is still a label below it.
+                if (i > 0 && current.subnode != null &&
+                    current.subnode.ContainsKey("*"))
                 {
-                    addr = node[parts[i]].addr;
-                    return true;
+                    HostNode wildcard = current.subnode["*"];
+                    if (wildcard.addr.Length > 0)
+                    {
+                        bestNode = wildcard;
+                        bestIndex = i - 1;
+                    }
                 }
-                if (node.ContainsKey("*"))
-                {
-                    addr = node["*"].addr;
-                    return true;
-                }
-                if (node[parts[i]].subnode == null)
-                {
-                    return false;
-                }
-                node = node[parts[i]].subnode;
+
+                if (current.subnode == null)
+                    break;
+
+                node = current.subnode;
             }
+
+            if (bestNode != null)
+            {
+                addr = bestNode.addr;
+                return true;
+            }
+
             return false;
         }
 
