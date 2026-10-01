@@ -110,7 +110,7 @@ namespace Shadowsocks.Controller
                                             }
                                         }
                                     }
-                                    if (ipAddress == null)
+                                    if (ipAddress == null && _config.proxyRuleMode != (int)ProxyRuleMode.UserCustom)
                                     {
                                         ipAddress = Utils.DnsBuffer.Get(host);
                                     }
