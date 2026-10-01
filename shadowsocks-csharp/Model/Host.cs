@@ -94,6 +94,7 @@ namespace Shadowsocks.Model
             Dictionary<string, HostNode> node = root;
             HostNode bestNode = null;
             int bestIndex = -1;
+            bool bestIsWildcard = false;
             addr = null;
 
             for (int i = parts.Length - 1; i >= 0; --i)
@@ -111,6 +112,7 @@ namespace Shadowsocks.Model
                 {
                     bestNode = current;
                     bestIndex = i;
+                    bestIsWildcard = false;
                 }
 
                 // A wildcard rule is more specific than a parent suffix,
@@ -123,6 +125,7 @@ namespace Shadowsocks.Model
                     {
                         bestNode = wildcard;
                         bestIndex = i - 1;
+                        bestIsWildcard = true;
                     }
                 }
 
@@ -135,6 +138,24 @@ namespace Shadowsocks.Model
             if (bestNode != null)
             {
                 addr = bestNode.addr;
+
+                string matchedRule;
+                if (bestIsWildcard)
+                {
+                    matchedRule = "*." + String.Join(".", parts, bestIndex + 1, parts.Length - bestIndex - 1);
+                }
+                else if (bestNode.include_sub)
+                {
+                    matchedRule = "." + String.Join(".", parts, bestIndex, parts.Length - bestIndex);
+                }
+                else
+                {
+                    matchedRule = String.Join(".", parts, bestIndex, parts.Length - bestIndex);
+                }
+
+                Logging.Info("[HostMap] host=" + host
+                    + " matched=" + matchedRule
+                    + " addr=" + addr);
                 return true;
             }
 
