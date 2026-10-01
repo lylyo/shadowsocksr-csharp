@@ -19,7 +19,7 @@ jobs:
       - name: Build Release
         shell: powershell
         run: |
-          msbuild .\shadowsocks-csharp.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU" /m
+          msbuild .\shadowsocks-csharp\shadowsocks-csharp.csproj /t:Build /p:Configuration=Release /p:Platform="Any CPU" /m
 
       - name: Package build output
         shell: powershell
