@@ -1,0 +1,35 @@
+name: Build 4.7.0
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "fix-host-longest-match-4.7.0"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release
+        shell: powershell
+        run: |
+          msbuild .\shadowsocks-csharp.sln /t:Build /p:Configuration=Release /p:Platform=AnyCPU /m
+
+      - name: Package build output
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path artifact | Out-Null
+          Copy-Item .\shadowsocks-csharp\bin\2.0\Release\* .\artifact\ -Recurse -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShadowsocksR-4.7.0-host-longest-match
+          path: artifact
+          if-no-files-found: error
