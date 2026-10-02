@@ -32,20 +32,27 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build Release
+      - name: Build Release net2.0
         shell: powershell
         run: |
-          msbuild .\shadowsocks-csharp\shadowsocks-csharp.csproj /t:Build /p:Configuration=Release /m
+          msbuild .\shadowsocks-csharp\shadowsocks-csharp.csproj /t:Build /p:Configuration=Release /p:TargetFrameworkVersion=v2.0 /m
+
+      - name: Build Release net4.0
+        shell: powershell
+        run: |
+          msbuild .\shadowsocks-csharp\shadowsocks-csharp.csproj /t:Build /p:Configuration=Release /p:TargetFrameworkVersion=v4.0 /m
 
       - name: Package build output
         shell: powershell
         run: |
-          New-Item -ItemType Directory -Force -Path artifact | Out-Null
-          Copy-Item .\shadowsocks-csharp\bin\2.0\Release\* .\artifact\ -Recurse -Force
+          New-Item -ItemType Directory -Force -Path artifact\net2.0 | Out-Null
+          New-Item -ItemType Directory -Force -Path artifact\net4.0 | Out-Null
+          Copy-Item .\shadowsocks-csharp\bin\2.0\Release\* .\artifact\net2.0\ -Recurse -Force
+          Copy-Item .\shadowsocks-csharp\bin\4.0\Release\* .\artifact\net4.0\ -Recurse -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowsocksR-4.7.0-host-longest-match
+          name: ShadowsocksR-4.7.0-host-longest-match-net2-net4
           path: artifact
           if-no-files-found: error
