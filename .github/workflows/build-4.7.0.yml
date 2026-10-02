@@ -13,6 +13,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Promote close diagnostics to Info
+        shell: powershell
+        run: |
+          $files = @(
+            '.\shadowsocks-csharp\Controller\Local.cs',
+            '.\shadowsocks-csharp\Controller\ProxyAuth.cs',
+            '.\shadowsocks-csharp\Controller\Socks5Forwarder.cs'
+          )
+          foreach ($file in $files) {
+            $text = Get-Content -Raw -Encoding UTF8 $file
+            $text = $text.Replace('Logging.Debug("[CloseDiag]', 'Logging.Info("[CloseDiag]')
+            $text = $text.Replace('Logging.Debug($"[CloseDiag]', 'Logging.Info($"[CloseDiag]')
+            Set-Content -Encoding UTF8 -NoNewline $file $text
+          }
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
