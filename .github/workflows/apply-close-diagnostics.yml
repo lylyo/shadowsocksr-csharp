@@ -21,6 +21,7 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           marker = "CLOSE_DIAGNOSTICS_202610"
 
@@ -56,17 +57,31 @@ jobs:
               text = replace_once(text, '''                closed = true;\n            }\n            Thread.Sleep(200);''', '''                closed = true;\n            }\n            LogCloseDiagnostics();\n            Thread.Sleep(200);''', "Local Close")
               return text
 
-          def patch_simple_close(text, class_name):
+          def patch_proxy_auth(text):
+              # ProxyAuth inherits Close(); it has no own Close implementation.
+              # Wrap its local Close() call sites so we still get the caller stack.
+              text = re.sub(r'(?<!WithDiag)\bClose\(\);', 'CloseWithDiag();', text)
+              anchor = '''        private void Dispose()\n        {'''
+              helper = '''        // CLOSE_DIAGNOSTICS_202610\n        private void CloseWithDiag()\n        {\n            Logging.Debug("[CloseDiag][ProxyAuth] stack=" + Environment.StackTrace);\n            Close();\n        }\n\n        private void Dispose()\n        {'''
+              return replace_once(text, anchor, helper, "ProxyAuth Dispose")
+
+          def patch_socks5(text):
               needle = '''            public void Close()\n            {'''
-              replacement = '''            // CLOSE_DIAGNOSTICS_202610\n            public void Close()\n            {\n                Logging.Debug("[CloseDiag][''' + class_name + '''] stack=" + Environment.StackTrace);'''
-              return replace_once(text, needle, replacement, class_name + " Close")
+              replacement = '''            // CLOSE_DIAGNOSTICS_202610\n            public void Close()\n            {\n                Logging.Debug("[CloseDiag][Socks5Forwarder] target=" + _remote_host + ":" + _remote_port.ToString() + " localProxy=" + _local_proxy.ToString() + " stack=" + Environment.StackTrace);'''
+              return replace_once(text, needle, replacement, "Socks5Forwarder Close")
 
           changed = False
           changed |= patch_file("shadowsocks-csharp/Controller/Local.cs", patch_local)
-          changed |= patch_file("shadowsocks-csharp/Controller/ProxyAuth.cs", lambda t: patch_simple_close(t, "ProxyAuthHandler"))
-          changed |= patch_file("shadowsocks-csharp/Controller/Socks5Forwarder.cs", lambda t: patch_simple_close(t, "Handler"))
+          changed |= patch_file("shadowsocks-csharp/Controller/ProxyAuth.cs", patch_proxy_auth)
+          changed |= patch_file("shadowsocks-csharp/Controller/Socks5Forwarder.cs", patch_socks5)
+
+          build_workflow = Path(".github/workflows/build-4.7.0.yml")
+          build_text = build_workflow.read_text(encoding="utf-8-sig")
+          build_text = build_text.replace("# CLOSE_DIAGNOSTICS_TRIGGER2\n", "").replace("# CLOSE_DIAGNOSTICS_TRIGGER\n", "")
+          build_workflow.write_text(build_text, encoding="utf-8")
+
           if not changed:
-              raise SystemExit("No files changed")
+              raise SystemExit("No source files changed")
 
           Path(".github/workflows/apply-close-diagnostics.yml").unlink()
 
@@ -74,6 +89,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add shadowsocks-csharp/Controller/Local.cs shadowsocks-csharp/Controller/ProxyAuth.cs shadowsocks-csharp/Controller/Socks5Forwarder.cs .github/workflows/apply-close-diagnostics.yml
+          git add shadowsocks-csharp/Controller/Local.cs shadowsocks-csharp/Controller/ProxyAuth.cs shadowsocks-csharp/Controller/Socks5Forwarder.cs .github/workflows/apply-close-diagnostics.yml .github/workflows/build-4.7.0.yml
           git commit -m "Add close lifecycle diagnostics"
           git push origin HEAD:fix-host-longest-match-4.7.0
