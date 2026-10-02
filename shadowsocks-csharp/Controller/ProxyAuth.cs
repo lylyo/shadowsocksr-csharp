@@ -80,7 +80,7 @@ namespace Shadowsocks.Controller
                     }
                     try
                     {
-                        s.CloseWithDiag();
+                        s.Close();
                     }
                     catch
                     {
