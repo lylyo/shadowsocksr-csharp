@@ -8,10 +8,12 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2019
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
 
       - name: Promote close diagnostics to Info
         shell: powershell
@@ -21,57 +23,85 @@ jobs:
             '.\shadowsocks-csharp\Controller\ProxyAuth.cs',
             '.\shadowsocks-csharp\Controller\Socks5Forwarder.cs'
           )
+
           $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
           foreach ($file in $files) {
-            $text = [System.IO.File]::ReadAllText($file, [System.Text.Encoding]::UTF8)
-            $text = $text.Replace('Logging.Debug("[CloseDiag]', 'Logging.Info("[CloseDiag]')
-            $text = $text.Replace('Logging.Debug($"[CloseDiag]', 'Logging.Info($"[CloseDiag]')
-            [System.IO.File]::WriteAllText($file, $text, $utf8NoBom)
+            $text = [System.IO.File]::ReadAllText(
+              $file,
+              [System.Text.Encoding]::UTF8
+            )
+
+            $text = $text.Replace(
+              'Logging.Debug("[CloseDiag]',
+              'Logging.Info("[CloseDiag]'
+            )
+
+            $text = $text.Replace(
+              'Logging.Debug($"[CloseDiag]',
+              'Logging.Info($"[CloseDiag]'
+            )
+
+            [System.IO.File]::WriteAllText(
+              $file,
+              $text,
+              $utf8NoBom
+            )
           }
+
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Install .NET Framework 4.0 Targeting Pack
+
+      - name: Install .NET Framework 4 Targeting Pack
         shell: powershell
         run: |
-          $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+          choco install netfx-4.0-devpack -y
 
-          $installPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
-            -latest `
-            -products * `
-            -property installationPath
 
-          Write-Host "VS path: $installPath"
-
-          & $vsInstaller modify `
-            --installPath $installPath `
-            --add Microsoft.Net.Component.4.0.TargetingPack `
-            --quiet `
-            --norestart `
-            --wait
-
-      - name: Build Release net2.0
+      - name: Build net2.0
         shell: powershell
         run: |
-          msbuild .\shadowsocks-csharp\shadowsocks-csharp.csproj /t:Build /p:Configuration=Release /p:TargetFrameworkVersion=v2.0 /m
+          msbuild .\shadowsocks-csharp\shadowsocks-csharp.csproj `
+          /t:Build `
+          /p:Configuration=Release `
+          /p:DefineConstants=_DOTNET_2_0 `
+          /m
 
-      - name: Build Release net4.0
+
+      - name: Build net4.0
         shell: powershell
         run: |
-          msbuild .\shadowsocks-csharp\shadowsocks-csharp.csproj /t:Build /p:Configuration=Release /p:TargetFrameworkVersion=v4.0 /m
+          msbuild .\shadowsocks-csharp\shadowsocks-csharp.csproj `
+          /t:Build `
+          /p:Configuration=Release `
+          /p:DefineConstants=_DOTNET_4_0 `
+          /m
 
-      - name: Package build output
+
+      - name: Package
         shell: powershell
         run: |
-          New-Item -ItemType Directory -Force -Path artifact\net2.0 | Out-Null
-          New-Item -ItemType Directory -Force -Path artifact\net4.0 | Out-Null
-          Copy-Item .\shadowsocks-csharp\bin\2.0\Release\* .\artifact\net2.0\ -Recurse -Force
-          Copy-Item .\shadowsocks-csharp\bin\4.0\Release\* .\artifact\net4.0\ -Recurse -Force
+
+          mkdir artifact\net2.0
+          mkdir artifact\net4.0
+
+          Copy-Item `
+          .\shadowsocks-csharp\bin\2.0\Release\* `
+          artifact\net2.0 `
+          -Recurse `
+          -Force
+
+          Copy-Item `
+          .\shadowsocks-csharp\bin\4.0\Release\* `
+          artifact\net4.0 `
+          -Recurse `
+          -Force
+
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowsocksR-4.7.0-host-longest-match-net2-net4
+          name: ShadowsocksR-4.7.0-net2-net4
           path: artifact
-          if-no-files-found: error
