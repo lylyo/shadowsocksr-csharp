@@ -1,0 +1,10 @@
+name: test-runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-2022
+    steps:
+      - run: echo hello
