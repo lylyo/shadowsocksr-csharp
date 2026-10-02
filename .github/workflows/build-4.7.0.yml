@@ -32,6 +32,25 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Install .NET Framework 4.0 Targeting Pack
+        shell: powershell
+        run: |
+          $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+
+          $installPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+            -latest `
+            -products * `
+            -property installationPath
+
+          Write-Host "VS path: $installPath"
+
+          & $vsInstaller modify `
+            --installPath $installPath `
+            --add Microsoft.Net.Component.4.0.TargetingPack `
+            --quiet `
+            --norestart `
+            --wait
+
       - name: Build Release net2.0
         shell: powershell
         run: |
