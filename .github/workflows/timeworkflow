@@ -5,6 +5,7 @@ on:
 
 jobs:
   test:
-    runs-on: windows-2022
+    runs-on: ubuntu-latest
     steps:
-      - run: echo hello
+      - name: test
+        run: echo hello
