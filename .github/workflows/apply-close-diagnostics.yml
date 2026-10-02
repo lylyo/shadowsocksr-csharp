@@ -1,0 +1,111 @@
+name: Apply close diagnostics patch
+
+on:
+  push:
+    branches:
+      - fix-host-longest-match-4.7.0
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix-host-longest-match-4.7.0
+
+      - name: Patch close diagnostics
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          marker = "CLOSE_DIAGNOSTICS_202610"
+
+          def patch_file(path, transform):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8-sig')
+              if marker in text:
+                  print(path + ': already patched')
+                  return False
+              new_text = transform(text)
+              if new_text == text:
+                  raise SystemExit('No patch applied to ' + path)
+              p.write_text(new_text, encoding='utf-8')
+              print(path + ': patched')
+              return True
+
+          def patch_local(text):
+              text = text.replace(
+                  "        protected DateTime lastTimerSetTime;\n",
+                  "        protected DateTime lastTimerSetTime;\n\n        // " + marker + "\n        private static int nextConnectionId;\n        private int connectionId;\n        private string closeReason;\n")
+              text = text.replace(
+                  "        public void Start(byte[] firstPacket, int length, string rsp_protocol)\n        {\n            connection.local_sendback_protocol = rsp_protocol;",
+                  "        public void Start(byte[] firstPacket, int length, string rsp_protocol)\n        {\n            if (connectionId == 0)\n                connectionId = Interlocked.Increment(ref nextConnectionId);\n            connection.local_sendback_protocol = rsp_protocol;")
+              text = text.replace(
+                  "            if (stop)\n            {\n                //Thread.Sleep(200);\n                Close();\n            }",
+                  "            if (stop)\n            {\n                SetCloseReason(\"timeout\");\n                //Thread.Sleep(200);\n                Close();\n            }")
+              text = text.replace(
+                  "                        CloseSocket(ref remote);\n                        Close();",
+                  "                        SetCloseReason(\"connect-timeout\");\n                        CloseSocket(ref remote);\n                        Close();")
+              text = text.replace(
+                  "                if (remote.IsClose)\n                {\n                    final_close = true;\n                }",
+                  "                if (remote.IsClose)\n                {\n                    SetCloseReason(\"remote-isclose\");\n                    final_close = true;\n                }")
+              text = text.replace(
+                  "                    if (remote != null && remote.IsClose)\n                    {\n                        final_close = true;\n                        break;\n                    }",
+                  "                    if (remote != null && remote.IsClose)\n                    {\n                        SetCloseReason(\"remote-isclose-loop\");\n                        final_close = true;\n                        break;\n                    }")
+              text = text.replace(
+                  "                if (remoteUDP.IsClose)\n                {\n                    final_close = true;\n                }",
+                  "                if (remoteUDP.IsClose)\n                {\n                    SetCloseReason(\"remote-udp-isclose\");\n                    final_close = true;\n                }")
+              text = text.replace(
+                  "                else\n                {\n                    local_error = true;\n                    final_close = true;\n                }\n            }\n            catch (Exception e)\n            {\n                local_error = true;\n                LogException(e);",
+                  "                else\n                {\n                    local_error = true;\n                    SetCloseReason(\"local-eof\");\n                    final_close = true;\n                }\n            }\n            catch (Exception e)\n            {\n                local_error = true;\n                SetCloseReason(\"local-receive-exception\");\n                LogException(e);")
+              text = text.replace(
+                  "                else\n                {\n                    final_close = true;\n                }\n            }\n            catch (Exception e)\n            {\n                LogException(e);\n                final_close = true;",
+                  "                else\n                {\n                    SetCloseReason(\"local-udp-eof\");\n                    final_close = true;\n                }\n            }\n            catch (Exception e)\n            {\n                SetCloseReason(\"local-udp-receive-exception\");\n                LogException(e);\n                final_close = true;")
+              text = text.replace(
+                  "        private void LogException(Exception e)\n        {\n            int err = LogSocketException(e);",
+                  "        private void SetCloseReason(string reason)\n        {\n            if (String.IsNullOrEmpty(closeReason))\n                closeReason = reason;\n        }\n\n        private void LogCloseDiagnostics()\n        {\n            string target = cfg == null ? \"<null>\" : cfg.targetHost + \":" + cfg.targetPort.ToString();\n            string remoteState = remote == null ? \"null\" : remote.IsClose.ToString();\n            string remoteUdpState = remoteUDP == null ? \"null\" : remoteUDP.IsClose.ToString();\n            string connectionState = connection == null ? \"null\" : \"open\";\n            string reason = String.IsNullOrEmpty(closeReason) ? \"unspecified\" : closeReason;\n            Logging.Debug(\"[CloseDiag] id=\" + connectionId\n                + \" reason=\" + reason\n                + \" target=\" + target\n                + \" state=\" + State.ToString()\n                + \" lastErr=\" + lastErrCode.ToString()\n                + \" local_error=\" + local_error.ToString()\n                + \" connection=\" + connectionState\n                + \" remote=\" + (remote == null ? \"null\" : \"present\")\n                + \" remoteIsClose=\" + remoteState\n                + \" remoteUDP=\" + (remoteUDP == null ? \"null\" : \"present\")\n                + \" remoteUDPIsClose=\" + remoteUdpState\n                + \" stack=\" + Environment.StackTrace);\n        }\n\n        private void LogException(Exception e)\n        {\n            if (String.IsNullOrEmpty(closeReason))\n                closeReason = \"exception:\" + e.GetType().Name + \":\" + e.Message;\n            int err = LogSocketException(e);")
+              text = text.replace(
+                  "        public void Close()\n        {\n            lock (this)",
+                  "        public void Close()\n        {\n            lock (this)")
+              text = text.replace(
+                  "                closed = true;\n            }\n            Thread.Sleep(200);",
+                  "                closed = true;\n            }\n            LogCloseDiagnostics();\n            Thread.Sleep(200);")
+              return text
+
+          def patch_simple_close(text, class_name):
+              text = text.replace(
+                  "    class " + class_name + "",
+                  "    class " + class_name + "",
+                  1)
+              needle = "        private void Close()\n        {"
+              replacement = (
+                  "        // " + marker + "\n"
+                  + needle + "\n"
+                  + "            Logging.Debug(\"[CloseDiag][" + class_name + "] stack=\" + Environment.StackTrace);"
+              )
+              if needle not in text:
+                  raise SystemExit('Close() not found in ' + class_name)
+              return text.replace(needle, replacement, 1)
+
+          changed = False
+          changed |= patch_file('shadowsocks-csharp/Controller/Local.cs', patch_local)
+          changed |= patch_file('shadowsocks-csharp/Controller/ProxyAuth.cs', lambda t: patch_simple_close(t, 'ProxyAuthHandler'))
+          changed |= patch_file('shadowsocks-csharp/Controller/Socks5Forwarder.cs', lambda t: patch_simple_close(t, 'Handler'))
+          if not changed:
+              raise SystemExit('No files changed')
+
+          # Remove this one-shot workflow so it cannot keep modifying the branch.
+          Path('.github/workflows/apply-close-diagnostics.yml').unlink()
+
+      - name: Commit diagnostics patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add shadowsocks-csharp/Controller/Local.cs shadowsocks-csharp/Controller/ProxyAuth.cs shadowsocks-csharp/Controller/Socks5Forwarder.cs .github/workflows/apply-close-diagnostics.yml
+          git commit -m "Add close lifecycle diagnostics"
+          git push origin HEAD:fix-host-longest-match-4.7.0
