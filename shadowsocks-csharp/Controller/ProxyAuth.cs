@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Net;
@@ -80,7 +80,7 @@ namespace Shadowsocks.Controller
                     }
                     try
                     {
-                        s.Close();
+                        s.CloseWithDiag();
                     }
                     catch
                     {
@@ -138,13 +138,13 @@ namespace Shadowsocks.Controller
                 }
                 else
                 {
-                    Close();
+                    CloseWithDiag();
                 }
             }
             catch (Exception e)
             {
                 Logging.LogUsefulException(e);
-                Close();
+                CloseWithDiag();
             }
         }
 
@@ -200,7 +200,7 @@ namespace Shadowsocks.Controller
                 response = new byte[] { 0, 91 };
                 Console.WriteLine("socks 4/5 protocol error");
                 _connection.Send(response);
-                Close();
+                CloseWithDiag();
                 return;
             }
             bool no_auth = false;
@@ -222,7 +222,7 @@ namespace Shadowsocks.Controller
             if (!has_method)
             {
                 Console.WriteLine("Socks5 no acceptable auth method");
-                Close();
+                CloseWithDiag();
                 return;
             }
             if (auth || !no_auth)
@@ -240,7 +240,7 @@ namespace Shadowsocks.Controller
             else
             {
                 Console.WriteLine("Socks5 Auth failed");
-                Close();
+                CloseWithDiag();
             }
         }
 
@@ -266,13 +266,13 @@ namespace Shadowsocks.Controller
                 else
                 {
                     Console.WriteLine("failed to recv data in HandshakeAuthReceiveCallback");
-                    Close();
+                    CloseWithDiag();
                 }
             }
             catch (Exception e)
             {
                 Logging.LogUsefulException(e);
-                Close();
+                CloseWithDiag();
             }
         }
 
@@ -307,13 +307,13 @@ namespace Shadowsocks.Controller
                 else
                 {
                     Console.WriteLine("failed to recv data in HandshakeReceive2Callback");
-                    Close();
+                    CloseWithDiag();
                 }
             }
             catch (Exception e)
             {
                 Logging.LogUsefulException(e);
-                Close();
+                CloseWithDiag();
             }
         }
 
@@ -342,13 +342,13 @@ namespace Shadowsocks.Controller
                 else
                 {
                     Console.WriteLine("failed to recv data in HandshakeReceive3Callback");
-                    Close();
+                    CloseWithDiag();
                 }
             }
             catch (Exception e)
             {
                 Logging.LogUsefulException(e);
-                Close();
+                CloseWithDiag();
             }
         }
 
@@ -489,7 +489,7 @@ namespace Shadowsocks.Controller
                 }
                 if (i == 3)
                 {
-                    Close();
+                    CloseWithDiag();
                     break;
                 }
             }
@@ -509,13 +509,13 @@ namespace Shadowsocks.Controller
                 else
                 {
                     Console.WriteLine("failed to recv data in HttpHandshakeRecv");
-                    Close();
+                    CloseWithDiag();
                 }
             }
             catch (Exception e)
             {
                 Logging.LogUsefulException(e);
-                Close();
+                CloseWithDiag();
             }
             return true;
         }
@@ -603,6 +603,13 @@ namespace Shadowsocks.Controller
                 return;
             }
             Dispose();
+            CloseWithDiag();
+        }
+
+        // CLOSE_DIAGNOSTICS_202610
+        private void CloseWithDiag()
+        {
+            Logging.Debug("[CloseDiag][ProxyAuth] stack=" + Environment.StackTrace);
             Close();
         }
 

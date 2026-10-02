@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Net;
@@ -181,6 +181,11 @@ namespace Shadowsocks.Controller
         protected object timerLock = new object();
         protected DateTime lastTimerSetTime;
 
+        // CLOSE_DIAGNOSTICS_202610
+        private static int nextConnectionId;
+        private int connectionId;
+        private string closeReason;
+
         enum ConnectState
         {
             END = -1,
@@ -317,6 +322,7 @@ namespace Shadowsocks.Controller
             }
             if (stop)
             {
+                SetCloseReason("timeout");
                 //Thread.Sleep(200);
                 Close();
             }
@@ -488,6 +494,8 @@ namespace Shadowsocks.Controller
 
         public void Start(byte[] firstPacket, int length, string rsp_protocol)
         {
+            if (connectionId == 0)
+                connectionId = Interlocked.Increment(ref nextConnectionId);
             connection.local_sendback_protocol = rsp_protocol;
             if (cfg.socks5RemotePort > 0)
             {
@@ -591,6 +599,7 @@ namespace Shadowsocks.Controller
                             lastErrCode = 8;
                             server.ServerSpeedLog().AddTimeoutTimes();
                         }
+                        SetCloseReason("connect-timeout");
                         CloseSocket(ref remote);
                         Close();
                     }
@@ -701,6 +710,7 @@ namespace Shadowsocks.Controller
                 }
                 closed = true;
             }
+            LogCloseDiagnostics();
             Thread.Sleep(200);
             CloseSocket(ref remote);
             CloseSocket(ref remoteUDP);
@@ -1322,6 +1332,7 @@ namespace Shadowsocks.Controller
 
                 if (remote.IsClose)
                 {
+                    SetCloseReason("remote-isclose");
                     final_close = true;
                 }
                 else
@@ -1408,6 +1419,7 @@ namespace Shadowsocks.Controller
                     DateTime now = DateTime.Now;
                     if (remote != null && remote.IsClose)
                     {
+                        SetCloseReason("remote-isclose-loop");
                         final_close = true;
                         break;
                     }
@@ -1500,6 +1512,7 @@ namespace Shadowsocks.Controller
 
                 if (remoteUDP.IsClose)
                 {
+                    SetCloseReason("remote-udp-isclose");
                     final_close = true;
                 }
                 else
@@ -1654,12 +1667,14 @@ namespace Shadowsocks.Controller
                 else
                 {
                     local_error = true;
+                    SetCloseReason("local-eof");
                     final_close = true;
                 }
             }
             catch (Exception e)
             {
                 local_error = true;
+                SetCloseReason("local-receive-exception");
                 LogException(e);
                 final_close = true;
             }
@@ -1708,11 +1723,13 @@ namespace Shadowsocks.Controller
                 }
                 else
                 {
+                    SetCloseReason("local-udp-eof");
                     final_close = true;
                 }
             }
             catch (Exception e)
             {
+                SetCloseReason("local-udp-receive-exception");
                 LogException(e);
                 final_close = true;
             }
@@ -1788,8 +1805,36 @@ namespace Shadowsocks.Controller
             return s.server;
         }
 
+        private void SetCloseReason(string reason)
+        {
+            if (String.IsNullOrEmpty(closeReason))
+                closeReason = reason;
+        }
+
+        private void LogCloseDiagnostics()
+        {
+            string target = cfg == null ? "<null>" : cfg.targetHost + ":" + cfg.targetPort.ToString();
+            string remoteState = remote == null ? "null" : remote.IsClose.ToString();
+            string remoteUdpState = remoteUDP == null ? "null" : remoteUDP.IsClose.ToString();
+            string reason = String.IsNullOrEmpty(closeReason) ? "unspecified" : closeReason;
+            Logging.Debug("[CloseDiag] id=" + connectionId
+                + " reason=" + reason
+                + " target=" + target
+                + " state=" + State.ToString()
+                + " lastErr=" + lastErrCode.ToString()
+                + " local_error=" + local_error.ToString()
+                + " connection=" + (connection == null ? "null" : "present")
+                + " remote=" + (remote == null ? "null" : "present")
+                + " remoteIsClose=" + remoteState
+                + " remoteUDP=" + (remoteUDP == null ? "null" : "present")
+                + " remoteUDPIsClose=" + remoteUdpState
+                + " stack=" + Environment.StackTrace);
+        }
+
         private void LogException(Exception e)
         {
+            if (String.IsNullOrEmpty(closeReason))
+                closeReason = "exception:" + e.GetType().Name + ":" + e.Message;
             int err = LogSocketException(e);
             string remarks;
             string server_url = getServerUrl(out remarks);

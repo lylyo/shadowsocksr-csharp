@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -632,8 +632,10 @@ namespace Shadowsocks.Controller
                 }
             }
 
+            // CLOSE_DIAGNOSTICS_202610
             public void Close()
             {
+                Logging.Debug("[CloseDiag][Socks5Forwarder] target=" + _remote_host + ":" + _remote_port.ToString() + " localProxy=" + _local_proxy.ToString() + " stack=" + Environment.StackTrace);
                 lock (this)
                 {
                     if (_closed)
