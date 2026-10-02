@@ -1,5 +1,6 @@
 name: Build 4.7.0
 
+# CLOSE_DIAGNOSTICS_TRIGGER
 on:
   workflow_dispatch:
   push:
