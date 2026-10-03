@@ -33,12 +33,28 @@ jobs:
           ref: Fix-user.rule
           fetch-depth: 1
 
-      - name: Install .NET Framework 4.0 Developer Pack
+      - name: Add Microsoft .NET Framework reference assemblies
         shell: pwsh
-        run: choco install netfx-4.0-devpack --yes --no-progress
+        run: |
+          @'
+          <Project>
+            <ItemGroup>
+              <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
+            </ItemGroup>
+          </Project>
+          '@ | Set-Content -Path "Directory.Build.props" -Encoding UTF8
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
+
+      - name: Restore reference assemblies
+        shell: pwsh
+        run: |
+          msbuild "${{ matrix.project }}" `
+            /t:Restore `
+            /p:Configuration=Release `
+            /p:Platform="AnyCPU" `
+            /verbosity:minimal
 
       - name: Build
         shell: pwsh
