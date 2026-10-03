@@ -33,6 +33,10 @@ jobs:
           ref: Fix-user.rule
           fetch-depth: 1
 
+      - name: Install .NET Framework 4.0 Developer Pack
+        shell: pwsh
+        run: choco install netfx-4.0-devpack --yes --no-progress
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
